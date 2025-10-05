@@ -6,3 +6,6 @@ A real world asteroid stimulator that uses  nasa datasets to predict the damage 
 API KEY INFO-
 API key fetched from nasa space apps website
 
+first run the frontend on the live server of index.html
+
+
