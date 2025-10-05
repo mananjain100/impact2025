@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Asteroid Impact Simulation 🌍</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: black;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+    }
+    input, button {
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      margin: 3px;
+    }
+    button {
+      background-color: #00bfff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0077aa;
+    }
+    #globeViz {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <input type="text" id="cityInput" placeholder="Enter a city (e.g., Delhi)">
+    <button onclick="simulateImpact()">☄️ Simulate Impact</button>
+  </div>
+  <div id="globeViz"></div>
+
+  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl"></script>
+
+  <script>
+    const globe = Globe()(document.getElementById('globeViz'))
+      .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+      .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+      .pointOfView({ lat: 20, lng: 0, altitude: 2 });
+      function calculateImpact(diameter, velocity, density) {
+  const radius = diameter / 2;
+  const volume = (4 / 3) * Math.PI * Math.pow(radius, 3);
+  const mass = volume * density;
+  const energy = 0.5 * mass * Math.pow(velocity, 2);
+  const tntMegatons = (energy / 4.184e9) / 1e6;
+  const destructionRadiusKm = Math.cbrt(tntMegatons) * 5;
+
+  return {
+    mass,
+    tntMegatons,
+    destructionRadiusKm
+  };
+}
+
+
+    let scene, camera, renderer;
+    setTimeout(() => {
+      scene = globe._scene;
+      camera = globe._camera;
+      renderer = globe._renderer;
+    }, 1000);
+
+    function createAsteroid(lat, lng, city, impactData) {
+      const asteroidGeo = new THREE.SphereGeometry(0.05, 16, 16);
+      const asteroidMat = new THREE.MeshBasicMaterial({ color: 0xffa500 });
+      const asteroid = new THREE.Mesh(asteroidGeo, asteroidMat);
+
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lng + 180) * (Math.PI / 180);
+      const r = 2.2;
+      asteroid.position.setFromSphericalCoords(r, phi, theta);
+
+      scene.add(asteroid);
+
+      let altitude = r;
+      const fallInterval = setInterval(() => {
+        altitude -= 0.02;
+        asteroid.position.setFromSphericalCoords(altitude, phi, theta);
+
+        if (altitude <= 1) {
+          clearInterval(fallInterval);
+          createExplosion(lat, lng, city, impactData);
+          scene.remove(asteroid);
+        }
+      }, 30);
+    }
+
+    function createExplosion(lat, lng, city, impactData) {
+      const explosionGeo = new THREE.SphereGeometry(0.1, 32, 32);
+      const explosionMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const explosion = new THREE.Mesh(explosionGeo, explosionMat);
+
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lng + 180) * (Math.PI / 180);
+      explosion.position.setFromSphericalCoords(1, phi, theta);
+      scene.add(explosion);
+
+      let scale = 1;
+      const grow = setInterval(() => {
+        scale += 0.1;
+        explosion.scale.set(scale, scale, scale);
+        explosion.material.color.setHSL(Math.random(), 1, 0.5);
+        if (scale > 3) {
+          clearInterval(grow);
+          scene.remove(explosion);
+          alert(`💥 Asteroid struck near ${city}!\n\n🌋 Energy: ${impactData.impact_energy_megatons.toFixed(2)} megatons\n📏 Destruction radius: ${impactData.destruction_radius_km.toFixed(2)} km`);
+        }
+      }, 100);
+    }
+
+    async function simulateImpact() {
+      const city = document.getElementById('cityInput').value.trim();
+      if (!city) return alert('Enter a city name first!');
+
+      try {
+        const res = await fetch('http://127.0.0.1:5000/impact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            city: city,
+            diameter: 100,   // You can make this dynamic later
+            velocity: 20000,
+            density: 3000
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          return alert(`Error: ${err.error}`);
+        }
+
+        const data = await res.json();
+        createAsteroid(data.lat, data.lon, data.city, data);
+      } catch (err) {
+        alert('Failed to connect to backend. Is the Flask server running?');
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
