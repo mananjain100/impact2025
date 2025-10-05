@@ -7,5 +7,6 @@ API KEY INFO-
 API key fetched from nasa space apps website
 
 first run the frontend on the live server of index.html
+runned on flask server
 
 
